@@ -1,0 +1,184 @@
+<%
+
+require 'cgi'
+
+@cgi = CGI.new( 'html4Tr' )
+
+print @cgi.header( 'type' => 'text/html; charset=utf-8' )
+
+%>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>DMARC Protokoll</title>
+<link rel="stylesheet" type="text/css" href="minimal.css">
+<link rel="icon" href="/favicon.ico">
+<script src="search.js"></script>
+</head>
+
+<body lang="de" onLoad="mystart()">
+
+<%
+
+require 'etc'
+require 'csv'
+require 'json'
+
+$: << '.'
+
+load 'include/basis.rbx'
+load 'include/config.rbx'
+
+FIELD_ISP = 0
+FIELD_DATE = 1
+FIELD_IP = 2
+FIELD_FROM = 3
+ONE_MONTH = 60 * 60 * 24 * 31
+START_TIME = ( Time.now - ONE_MONTH ).strftime( '%Y-%m-%d' ).freeze
+
+puts File.read( 'include/level-index.html' )
+
+%>
+
+<h3>DMARC Protokoll</h3>
+
+<p>
+Sortieren nach:
+<a href="dmarc.rhtml">Datum</a>,
+<a href="dmarc.rhtml?order=from">Absender</a>,
+<a href="dmarc.rhtml?order=ip">Server</a>,
+<br>
+<br>
+Suche:
+<input type="button" id="reset" value="reset" onclick="search.value='';mysearch();">
+<input type="text" id="search" name="search" value="" onkeyup="mysearch()">
+</p>
+<table class="status" border="1" cellpadding="3" cellspacing="0">
+<tbody>
+
+<%
+
+# read allowed domains from file
+def read_domains( filename )
+  @domains = {}
+  File.read( filename ).split( "\n" ).each do |line|
+    next if line == ''
+    next if line[ 0 ] == '#'[ 0 ]
+
+    zelle = line.split( "\t", 2 )
+    value = zelle[ 1 ].strip
+    next if zelle[ 0 ] == ''
+    next if value == ''
+    next unless zelle[ 0 ] == 'Domain(s)'
+
+    value.split( ',' ).each do |wort|
+      @domains[ wort ] = true
+    end
+  end
+  # pp @domains
+end
+
+# read allowed user
+def read_user
+  if ADMIN_USER.nil?
+    @domains = nil
+    @admin = true
+    return
+  end
+
+  user = get_http_user
+  @admin = user == ADMIN_USER
+  read_domains( "daten/#{user}" )
+end
+
+# get css color
+def get_style( field )
+  case field
+  when 'fail', /:fail/
+    return ' style="color:red;"'
+  when 'pass', /:pass .*:pass/
+    return ' style="color:green;"'
+  end
+  return '' unless @dns_cache.key?( field )
+
+  name = @dns_cache[ field ]
+  return ' style="color:red;"' if name == 'not found'
+
+  color =
+    if GREEN_MX.include?( field )
+      ' style="color:green;"'
+    else
+      ''
+    end
+  "#{color} title=\"#{name}\""
+end
+
+# print table field with color
+def color_field( field )
+  puts "<td#{get_style( field )}>#{field}</td>"
+end
+
+# print colum titles
+def titles( row )
+  puts '<tr>'
+  row.each do |field|
+    puts '<th>'
+    puts field
+    puts '</th>'
+  end
+  puts '</tr>'
+end
+
+# match user domains
+def domain_bad?( from )
+  return false if ADMIN_USER.nil?
+  return false if @domains.key?( from )
+  return true unless @admin
+
+  # report to admin
+  puts "skip #{from}<br>"
+  true
+end
+
+# read DNS cache file
+def read_cache
+  @dns_cache = {}
+  return unless File.exist?( DNS_CACHE_FILE )
+
+  @dns_cache = JSON.parse( File.read( DNS_CACHE_FILE ) )
+end
+
+read_user
+read_cache
+rows = CSV.read( DMARC_CSV_FILE, col_sep: ';', encoding: 'UTF-8' )
+titles( rows.shift )
+rows.reverse!
+
+case get_post( @cgi, 'order' )
+when 'from'
+  rows.sort_by! { |e| [ e[ FIELD_FROM ], e[ FIELD_IP ], e[ FIELD_DATE ], e[ FIELD_ISP ] ] }
+when 'ip'
+  rows.sort_by! { |e| [ e[ FIELD_IP ], e[ FIELD_FROM ], e[ FIELD_DATE ], e[ FIELD_ISP ] ] }
+end
+
+rows.each do |row|
+  next if row[ FIELD_DATE ] <= START_TIME
+  next if domain_bad?( row[ FIELD_FROM ] )
+
+  puts '<tr>'
+  row.each do |field|
+    color_field( field )
+  end
+  puts '</tr>'
+end
+
+%>
+</tbody>
+</table>
+
+<br>
+</body>
+</html>
+
