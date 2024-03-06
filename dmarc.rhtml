@@ -38,7 +38,13 @@ FIELD_FROM = 3
 ONE_MONTH = 60 * 60 * 24 * 31
 START_TIME = ( Time.now - ONE_MONTH ).strftime( '%Y-%m-%d' ).freeze
 
-puts File.read( 'include/level-index.html' )
+def include_navigation( filename )
+  return unless File.exist?( filename )
+  
+  puts File.read( filename )
+end
+
+include_navigation( 'include/level-index.html' )
 
 %>
 
