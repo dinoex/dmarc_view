@@ -3,6 +3,7 @@
   - add examples
   - make navigation optional
   - protect configuration
+  - use debian path for erubis
 
 ## 1.0 (2023-12-26)
 

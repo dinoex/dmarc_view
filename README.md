@@ -37,7 +37,7 @@ vim /usr/local/bin/eruby
 #!/bin/sh
 LANG="de_DE.UTF-8"
 export LANG
-/usr/local/bin/erubis -E Stdout "${@}" 2>> /var/log/lighttpd/eruby-error.log
+/usr/bin/erubis -E Stdout "${@}" 2>> /var/log/lighttpd/eruby-error.log
 # eof
 ````
 
