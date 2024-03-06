@@ -14,7 +14,7 @@ then
 	exit 69
 fi
 
-chown -R www-data:www-data: \
+chown -R www-data:www-data \
 	dmarc.rhtml favicon.ico include minimal.css search.js \
 
 rsync -a --ignore-existing \
